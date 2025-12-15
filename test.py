@@ -1,60 +1,91 @@
-from actors import Alice, Bob, Eve
+from protocol import BB84Protocol
 
-n_qubits = 30
-WITH_EVE = True
 
-alice = Alice("Alice")
-bob = Bob("Bob")
-eve = Eve("Eve")
+def test_eve_detection(n_qubits, threshold, k_trials):
+    """
+    Ejecuta k pruebas del protocolo BB84 con Eva presente.
+    Cuenta cuántas veces Eva NO es detectada.
+    
+    Args:
+        n_qubits: Número de qubits en la clave inicial
+        threshold: Umbral de QBER para detectar atacante (típicamente 0.11)
+        k_trials: Número de pruebas a realizar
+    
+    Returns:
+        dict: Resultados con estadísticas de detección
+    """
+    eve_not_detected = 0
+    eve_detected = 0
+    qber_values = []
+    
+    print(f"\n{'='*70}")
+    print(f"PRUEBA DE DETECCIÓN DE EVA")
+    print(f"{'='*70}")
+    print(f"Parámetros:")
+    print(f"  - Qubits por prueba: {n_qubits}")
+    print(f"  - Umbral de detección: {threshold*100:.1f}%")
+    print(f"  - Número de pruebas: {k_trials}")
+    print(f"\nEjecutando pruebas...")
+    
+    for i in range(k_trials):
+        protocol = BB84Protocol(n_qubits=n_qubits, with_eve=True, noise_level=0.0)
+        protocol.run()
+        detected = protocol.detect_eavesdropper(threshold=threshold)
+        qber = protocol.calculate_qber()
+        
+        qber_values.append(qber)
+        
+        if detected:
+            eve_detected += 1
+        else:
+            eve_not_detected += 1
+        
+        if (i + 1) % 10 == 0:
+            print(f"  Completadas {i + 1}/{k_trials} pruebas...")
+    
+    detection_rate = (eve_detected / k_trials) * 100
+    avg_qber = sum(qber_values) / len(qber_values)
+    min_qber = min(qber_values)
+    max_qber = max(qber_values)
+    
+    print(f"\n{'='*70}")
+    print(f"RESULTADOS")
+    print(f"{'='*70}")
+    print(f"\nEstadísticas de Detección:")
+    print(f"  - Eva detectada: {eve_detected}/{k_trials} veces ({detection_rate:.1f}%)")
+    print(f"  - Eva NO detectada: {eve_not_detected}/{k_trials} veces ({100-detection_rate:.1f}%)")
+    print(f"\nEstadísticas de QBER:")
+    print(f"  - QBER promedio: {avg_qber*100:.2f}%")
+    print(f"  - QBER mínimo: {min_qber*100:.2f}%")
+    print(f"  - QBER máximo: {max_qber*100:.2f}%")
+    print(f"  - Umbral usado: {threshold*100:.1f}%")
+    print(f"\n{'='*70}\n")
+    
+    results = {
+        'n_qubits': n_qubits,
+        'threshold': threshold,
+        'k_trials': k_trials,
+        'eve_detected': eve_detected,
+        'eve_not_detected': eve_not_detected,
+        'detection_rate': detection_rate,
+        'avg_qber': avg_qber,
+        'min_qber': min_qber,
+        'max_qber': max_qber,
+        'qber_values': qber_values
+    }
+    
+    return results
 
-print("=== PROTOCOLO BB84 - PRUEBA ===")
-print(f"CON EVA: {'SÍ' if WITH_EVE else 'NO'}\n")
 
-print("1. Alice prepara su clave secreta")
-alice.prepare_key(n_qubits)
-print(f"   Bits de Alice:  {alice.get_bits()}")
-print(f"   Bases de Alice: {alice.get_bases()}\n")
+if __name__ == "__main__":
 
-print("2. Alice codifica y envía los qubits en un solo circuito")
-quantum_channel = alice.send_all_qubits()
-print(f"   Circuito cuántico con {quantum_channel.num_qubits} qubits creado\n")
-
-if WITH_EVE:
-    print("3. Eva intercepta, mide y reenvía")
-    quantum_channel = eve.intercept_and_resend(quantum_channel)
-    print(f"   Eva midió con bases: {eve.get_bases()[:10]}...")
-    print(f"   Eva obtuvo bits: {eve.get_bits()[:10]}...\n")
-
-print(f"{'4' if WITH_EVE else '3'}. Bob recibe y mide todos los qubits")
-bob.receive_and_measure_all(quantum_channel)
-print(f"   Bits de Bob:  {bob.get_bits()[:10]}...")
-print(f"   Bases de Bob: {bob.get_bases()[:10]}...\n")
-
-print(f"{'5' if WITH_EVE else '4'}. Comparación de bases Alice-Bob y filtrado (sifting)")
-matching_indices_alice_bob = alice.compare_bases(bob.get_bases())
-print(f"   Bases coincidentes en posiciones: {matching_indices_alice_bob}")
-print(f"   Total de coincidencias: {len(matching_indices_alice_bob)} de {n_qubits}\n")
-
-if WITH_EVE:
-    print("   Comparación de bases Alice-Eva:")
-    matching_indices_alice_eve = [i for i in range(n_qubits) if alice.get_bases()[i] == eve.get_bases()[i]]
-    eve_bits_matching_alice = [eve.get_bits()[i] for i in matching_indices_alice_eve]
-    alice_bits_matching_eve = [alice.get_bits()[i] for i in matching_indices_alice_eve]
-    eve_errors = sum(1 for i in range(len(eve_bits_matching_alice)) if eve_bits_matching_alice[i] != alice_bits_matching_eve[i])
-    print(f"   Total coincidencias Alice-Eva: {len(matching_indices_alice_eve)} de {n_qubits}")
-    print(f"   Bits de Eva (bases coincidentes con Alice): {eve_bits_matching_alice[:15]}...")
-    print(f"   Bits de Alice (bases coincidentes con Eva): {alice_bits_matching_eve[:15]}...")
-    print(f"   Errores Eva vs Alice: {eve_errors} de {len(eve_bits_matching_alice)}\n")
-
-alice.sift_key(matching_indices_alice_bob)
-bob.sift_key(matching_indices_alice_bob)
-
-print(f"{'6' if WITH_EVE else '5'}. Claves finales después de sifting")
-print(f"   Clave de Alice: {alice.get_bits()[:20]}{'...' if len(alice.get_bits()) > 20 else ''}")
-print(f"   Clave de Bob:   {bob.get_bits()[:20]}{'...' if len(bob.get_bits()) > 20 else ''}\n")
-
-print(f"{'7' if WITH_EVE else '6'}. Verificación")
-errors = sum(1 for i in range(len(alice.get_bits())) if alice.get_bits()[i] != bob.get_bits()[i])
-print(f"   Errores: {errors}")
-print(f"   Claves idénticas: {'✓ SÍ' if errors == 0 else '✗ NO'}")
-print(f"   QBER: {errors/len(alice.get_bits())*100:.1f}%" if len(alice.get_bits()) > 0 else "N/A")
+    print("\nEjecutando pruebas con parámetros por defecto...\n")
+    
+    print("### PRUEBA 1: 50 qubits, 100 pruebas ###")
+    test_eve_detection(n_qubits=50, threshold=0.11, k_trials=100)
+    
+    print("\n### PRUEBA 2: 100 qubits, 100 pruebas ###")
+    test_eve_detection(n_qubits=100, threshold=0.11, k_trials=100)
+    
+    print("\n### PRUEBA 3: 200 qubits, 100 pruebas ###")
+    test_eve_detection(n_qubits=200, threshold=0.11, k_trials=100)

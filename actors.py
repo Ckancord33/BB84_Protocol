@@ -79,24 +79,6 @@ class Alice(Person):
             basis = self.choose_random_basis()
             self.store_measurement(bit, basis)
     
-    def encode_qubit(self, index):
-        #Codifica un solo qubit en un circuito cuántico según la base elegida.
-        qc = QuantumCircuit(1)
-        bit = self.bits[index]
-        basis = self.bases[index]
-        
-        if basis == 'Z':
-            if bit == 1:
-                qc.x(0)
-        elif basis == 'X':
-            if bit == 0:
-                qc.h(0)
-            else:
-                qc.x(0)
-                qc.h(0)
-        
-        return qc
-    
     def send_all_qubits(self):
         n = len(self.bits)
         qc = QuantumCircuit(n, n)

@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+actors.py
+__pycache__/actors.cpython-313.pyc
